@@ -16,7 +16,7 @@ public class Room {
     private volatile boolean followerPhase;
     private String hostName;
 
-    public static final int MIN_PLAYERS = 5;
+     public static final int MIN_PLAYERS = 4;
     public static final int MAX_PLAYERS = 8;
 
     public Room(String roomId) {

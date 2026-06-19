@@ -20,6 +20,6 @@ public class PregameController {
         conman.setConman(true);
 
         int size = players.size();
-        gameState.setRequiredFollowers(size >= 7 ? 2 : 1);
+        gameState.setRequiredFollowers(size <= 4 ? 0 : size >= 7 ? 2 : 1);
     }
 }

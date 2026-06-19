@@ -103,8 +103,17 @@ public class GameService {
     // --- FOLLOWER PHASE ---
 
     private void startFollowerPhase(Room room) {
-        room.setFollowerPhase(true);
         GameState gs = room.getGameState();
+
+        if (gs.getRequiredFollowers() == 0) {
+            for (WebSocketSession s : room.getSessions()) {
+                Player p = room.getPlayer(s);
+                if (p != null) sendJson(s, Map.of("type", "DAY_PHASE", "myRole", p.getRole()));
+            }
+            return;
+        }
+
+        room.setFollowerPhase(true);
         Player conman = gs.getConman();
         WebSocketSession conmanSession = room.getSession(conman);
 
