@@ -40,10 +40,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                     String name = node.path("name").asText("Unknown");
                     gameService.joinRoom(roomId, session, name);
                 }
-                case "ROLL_DICE" -> {
-                    int roll = node.path("roll").asInt(1);
-                    gameService.playerReadyUp(roomId, session, roll);
-                }
+                case "ROLL_DICE" -> gameService.playerReadyUp(roomId, session);
                 case "PEEK" -> {
                     String target = node.path("targetName").asText("");
                     gameService.playerPeek(roomId, session, target);

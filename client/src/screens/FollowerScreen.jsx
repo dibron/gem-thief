@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 
 export default function FollowerScreen() {
-    const { screen, nightData, followerData, insiderData, send, roomCode } = useGame();
+    const { nightData, followerData, insiderData, send, roomCode } = useGame();
     const isConman = nightData.myRole === 'CONMAN';
     const [selected, setSelected] = useState([]);
     const [submitted, setSubmitted] = useState(false);

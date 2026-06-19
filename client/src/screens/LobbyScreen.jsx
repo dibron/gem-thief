@@ -1,152 +1,19 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 
 const DICE_FACES = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 
-// --- VAULT CRACKER MINI-GAME ---
-function VaultCracker() {
-    const [angle, setAngle] = useState(0);
-    const [taps, setTaps] = useState(0);
-    const [combo, setCombo] = useState(0);
-    const [bestCombo, setBestCombo] = useState(0);
-    const [sparks, setSparks] = useState([]);
-    const [targetZone, setTargetZone] = useState(randomZone());
-    const [cracked, setCracked] = useState(0);
-    const lastTap = useRef(0);
-    const sparkId = useRef(0);
-
-    function randomZone() {
-        return Math.floor(Math.random() * 12) * 30;
-    }
-
-    const isInZone = useCallback((a) => {
-        const diff = Math.abs(((a % 360) + 360) % 360 - targetZone);
-        return diff < 30 || diff > 330;
-    }, [targetZone]);
-
-    const handleTap = () => {
-        const now = Date.now();
-        const speed = now - lastTap.current < 200 ? 25 : now - lastTap.current < 400 ? 18 : 12;
-        lastTap.current = now;
-
-        const newAngle = angle + speed;
-        setAngle(newAngle);
-        setTaps(t => t + 1);
-
-        if (isInZone(newAngle)) {
-            const newCombo = combo + 1;
-            setCombo(newCombo);
-            if (newCombo > bestCombo) setBestCombo(newCombo);
-            if (newCombo % 5 === 0) {
-                setCracked(c => c + 1);
-                setTargetZone(randomZone());
-            }
-        } else {
-            setCombo(0);
-        }
-
-        const id = sparkId.current++;
-        const sparkAngle = (newAngle % 360) * (Math.PI / 180);
-        const r = 58;
-        setSparks(prev => [...prev.slice(-6), {
-            id, x: 80 + Math.cos(sparkAngle - Math.PI/2) * r,
-            y: 80 + Math.sin(sparkAngle - Math.PI/2) * r
-        }]);
-        setTimeout(() => setSparks(prev => prev.filter(s => s.id !== id)), 400);
-    };
-
-    const dialAngle = angle % 360;
-    const zoneStart = (targetZone - 15) * (Math.PI / 180) - Math.PI/2;
-    const zoneEnd = (targetZone + 15) * (Math.PI / 180) - Math.PI/2;
-
-    return (
-        <div style={g.box}>
-            <p style={g.label}>&#x1F513; VAULT CRACKER</p>
-            <div style={g.gameArea}>
-                <svg width="160" height="160" viewBox="0 0 160 160" onClick={handleTap} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    {/* Outer ring */}
-                    <circle cx="80" cy="80" r="70" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8"/>
-                    {/* Target zone arc */}
-                    <path d={`M ${80 + 70*Math.cos(zoneStart)} ${80 + 70*Math.sin(zoneStart)} A 70 70 0 0 1 ${80 + 70*Math.cos(zoneEnd)} ${80 + 70*Math.sin(zoneEnd)}`}
-                        fill="none" stroke={combo > 0 ? '#4ade80' : 'rgba(234,179,8,0.4)'} strokeWidth="8" strokeLinecap="round"/>
-                    {/* Inner circle */}
-                    <circle cx="80" cy="80" r="44" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
-                    {/* Dial notches */}
-                    {[...Array(12)].map((_, i) => {
-                        const a = (i * 30) * (Math.PI / 180) - Math.PI/2;
-                        return <line key={i} x1={80+54*Math.cos(a)} y1={80+54*Math.sin(a)}
-                            x2={80+62*Math.cos(a)} y2={80+62*Math.sin(a)}
-                            stroke="rgba(255,255,255,0.15)" strokeWidth="2"/>;
-                    })}
-                    {/* Rotating pointer */}
-                    {(() => {
-                        const a = dialAngle * (Math.PI / 180) - Math.PI/2;
-                        return <line x1="80" y1="80" x2={80+58*Math.cos(a)} y2={80+58*Math.sin(a)}
-                            stroke={combo > 0 ? '#4ade80' : '#eab308'} strokeWidth="3" strokeLinecap="round"
-                            style={{ transition: 'all 0.08s', filter: combo > 3 ? 'drop-shadow(0 0 6px #4ade80)' : 'none' }}/>;
-                    })()}
-                    {/* Center dot */}
-                    <circle cx="80" cy="80" r="6" fill={combo > 0 ? '#4ade80' : '#eab308'}
-                        style={{ filter: combo > 3 ? 'drop-shadow(0 0 8px #4ade80)' : 'none' }}/>
-                    {/* Center text */}
-                    <text x="80" y="108" textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.3)" fontFamily="monospace">{taps}</text>
-                    {/* Sparks */}
-                    {sparks.map(sp => (
-                        <circle key={sp.id} cx={sp.x} cy={sp.y} r="3"
-                            fill={combo > 0 ? '#4ade80' : '#eab308'} opacity="0.8">
-                            <animate attributeName="r" from="3" to="8" dur="0.4s" fill="freeze"/>
-                            <animate attributeName="opacity" from="0.8" to="0" dur="0.4s" fill="freeze"/>
-                        </circle>
-                    ))}
-                </svg>
-
-                <div style={g.stats}>
-                    <div style={g.stat}>
-                        <span style={g.statVal}>{combo}</span>
-                        <span style={g.statKey}>combo</span>
-                    </div>
-                    <div style={g.stat}>
-                        <span style={{ ...g.statVal, color: '#eab308' }}>{cracked}</span>
-                        <span style={g.statKey}>cracked</span>
-                    </div>
-                    <div style={g.stat}>
-                        <span style={g.statVal}>{bestCombo}</span>
-                        <span style={g.statKey}>best</span>
-                    </div>
-                </div>
-            </div>
-            <p style={g.hint}>Tap the dial &bull; Hit the gold zone for combos &bull; 5 combo = crack</p>
-        </div>
-    );
-}
-
-const g = {
-    box: { width: '100%', maxWidth: '400px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'center', marginBottom: '12px' },
-    label: { fontSize: '0.7rem', fontWeight: 700, letterSpacing: '2px', color: '#6b7280', margin: '0 0 8px' },
-    gameArea: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' },
-    stats: { display: 'flex', flexDirection: 'column', gap: '8px' },
-    stat: { display: 'flex', flexDirection: 'column', alignItems: 'center' },
-    statVal: { fontSize: '1.4rem', fontWeight: 800, color: '#4ade80', fontFamily: 'monospace' },
-    statKey: { fontSize: '0.65rem', color: '#6b7280', letterSpacing: '1px', textTransform: 'uppercase' },
-    hint: { fontSize: '0.7rem', color: '#4b5563', marginTop: '8px' },
-};
-
-// --- MAIN LOBBY SCREEN ---
 export default function LobbyScreen() {
-    const { roomCode, players, isHost, send, readyCount, lobbyInfo, leaveGame } = useGame();
-    const [rolled, setRolled] = useState(null);
-    const [rolling, setRolling] = useState(false);
+    const { roomCode, players, isHost, send, readyCount, lobbyInfo, leaveGame, nightData } = useGame();
+    const [readyClicked, setReadyClicked] = useState(false);
 
     const phaseCount = lobbyInfo.phaseCount || 6;
+    const myDice = nightData.myDice;
+    const rolled = myDice > 0;
 
     const handleRoll = () => {
-        setRolling(true);
-        setTimeout(() => {
-            const val = Math.floor(Math.random() * phaseCount) + 1;
-            setRolled(val);
-            setRolling(false);
-            send({ action: "ROLL_DICE", roomId: roomCode, roll: val });
-        }, 900);
+        setReadyClicked(true);
+        send({ action: "ROLL_DICE", roomId: roomCode });
     };
 
     const setPhases = (count) => {
@@ -154,7 +21,6 @@ export default function LobbyScreen() {
     };
 
     const canStart = players.length >= lobbyInfo.min;
-    const isWaiting = !canStart || rolled != null;
 
     return (
         <div style={s.page}>
@@ -210,17 +76,24 @@ export default function LobbyScreen() {
                         <div style={{ fontSize: '1.5rem', animation: 'pulse 2s infinite' }}>&#x1F6A8;</div>
                         <p>Need {lobbyInfo.min - players.length} more guard{lobbyInfo.min - players.length !== 1 ? 's' : ''} to secure the vault</p>
                     </div>
-                ) : rolled == null ? (
-                    <button onClick={handleRoll} disabled={rolling} style={rolling ? s.btnRolling : s.btnRoll}>
-                        <span style={rolling ? { animation: 'shake 0.3s infinite', display: 'inline-block' } : {}}>
-                            {rolling ? '\u{1F3B2} Assigning...' : '\u{1F3B2} Roll for Patrol Shift'}
-                        </span>
+                ) : !readyClicked ? (
+                    <button onClick={handleRoll} style={s.btnRoll}>
+                        <span>{'\u{1F3B2} Roll for Patrol Shift'}</span>
                     </button>
+                ) : !rolled ? (
+                    <div style={s.rolledBox}>
+                        <div style={{ ...s.diceResult, animation: 'shake 0.4s infinite' }}>{'\u{1F3B2}'}</div>
+                        <p style={s.rollText}>Waiting for all guards to ready up...</p>
+                        <div style={s.bar}>
+                            <div style={{ ...s.barFill, width: `${(readyCount.count / readyCount.total) * 100}%` }} />
+                        </div>
+                        <p style={s.barLabel}>{readyCount.count}/{readyCount.total} ready</p>
+                    </div>
                 ) : (
                     <div style={s.rolledBox}>
-                        <div style={s.diceResult}>{DICE_FACES[rolled]}</div>
-                        <p style={s.rollText}>Shift <strong>{rolled}</strong> assigned</p>
-                        <p style={s.rollHint}>You'll patrol during Shift {rolled}</p>
+                        <div style={s.diceResult}>{DICE_FACES[myDice] || myDice}</div>
+                        <p style={s.rollText}>Shift <strong>{myDice}</strong> assigned</p>
+                        <p style={s.rollHint}>You'll patrol during Shift {myDice}</p>
                         <div style={s.bar}>
                             <div style={{ ...s.barFill, width: `${(readyCount.count / readyCount.total) * 100}%` }} />
                         </div>
@@ -228,8 +101,6 @@ export default function LobbyScreen() {
                     </div>
                 )}
             </div>
-
-            {isWaiting && <VaultCracker />}
 
             <button onClick={leaveGame} style={s.btnLeave}>Abandon Post</button>
         </div>
@@ -249,7 +120,6 @@ const s = {
     actionArea: { width: '100%', maxWidth: '400px', marginBottom: '16px' },
     waitBox: { textAlign: 'center', padding: '20px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', color: '#6b7280' },
     btnRoll: { width: '100%', padding: '18px', fontSize: '1.15rem', fontWeight: 700, borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg, #b45309, #d97706, #eab308)', color: '#000', boxShadow: '0 6px 24px rgba(234,179,8,0.35)', animation: 'glow 2s infinite' },
-    btnRolling: { width: '100%', padding: '18px', fontSize: '1.15rem', fontWeight: 700, borderRadius: '12px', border: 'none', background: '#374151', color: '#9ca3af', cursor: 'wait' },
     rolledBox: { textAlign: 'center', padding: '24px', background: 'rgba(234,179,8,0.05)', borderRadius: '12px', border: '1px solid rgba(234,179,8,0.15)' },
     diceResult: { fontSize: '4rem', margin: '0 0 6px', animation: 'fadeIn 0.5s' },
     rollText: { fontSize: '1.1rem', color: '#fef3c7', margin: '0 0 2px' },

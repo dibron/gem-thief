@@ -33,6 +33,7 @@ export function GameProvider({ children }) {
 
     const socketRef = useRef(null);
     const intentionalClose = useRef(false);
+    const lobbyInfoRef = useRef(lobbyInfo);
 
     const handleMsg = useCallback((event) => {
         const d = JSON.parse(event.data);
@@ -40,7 +41,9 @@ export function GameProvider({ children }) {
         switch (d.type) {
             case 'LOBBY_UPDATE':
                 setPlayers(d.players.map((name, i) => ({ id: i, name, isHost: name === d.hostName })));
-                setLobbyInfo({ min: d.minPlayers || 4, max: d.maxPlayers || 8, phaseCount: d.phaseCount || 6 });
+                const info = { min: d.minPlayers || 4, max: d.maxPlayers || 8, phaseCount: d.phaseCount || 6 };
+                setLobbyInfo(info);
+                lobbyInfoRef.current = info;
                 setScreen(prev => prev === 'home' ? 'lobby' : prev);
                 break;
 
@@ -49,7 +52,7 @@ export function GameProvider({ children }) {
                 break;
 
             case 'DICE_ROLLED':
-                setNightData(prev => ({ ...prev, myDice: d.myDice }));
+                setNightData(prev => ({ ...prev, myDice: d.myDice, ...(d.myRole ? { myRole: d.myRole } : {}) }));
                 break;
 
             case 'READY_COUNT':
@@ -111,7 +114,7 @@ export function GameProvider({ children }) {
 
             case 'GAME_RESTART':
                 setScreen('lobby');
-                setNightData({ phase: 0, totalPhases: 6, myRole: '', myDice: 0, isAwake: false, awakeWithMe: [], canPeek: false, gemStatus: '', conmanName: '', peekResult: '' });
+                setNightData({ phase: 0, totalPhases: lobbyInfoRef.current.phaseCount || 6, myRole: '', myDice: 0, isAwake: false, awakeWithMe: [], canPeek: false, gemStatus: '', conmanName: '', peekResult: '' });
                 setReadyCount({ count: 0, total: 4, readyPlayers: [] });
                 setVoteCount({ count: 0, total: 4 });
                 setGameResult(null);

@@ -51,35 +51,77 @@ public class GameService {
         }
     }
 
-    public void playerReadyUp(String roomId, WebSocketSession session, int roll) {
+    public void playerReadyUp(String roomId, WebSocketSession session) {
         Room room = rooms.get(roomId);
         if (room == null) return;
 
         Player p = room.getPlayer(session);
         if (p == null || p.getDiceRoll() != 0) return;
-        if (roll < 1 || roll > room.getPhaseCount()) return;
 
-        p.setDiceRoll(roll);
-        room.getGameState().setPlayerAtTime(p, roll);
-
-        sendJson(session, Map.of("type", "DICE_ROLLED", "myDice", roll));
+        p.setDiceRoll(-1);
         broadcastReadyCount(room);
 
-        long ready = room.getGameState().getPlayers().stream().filter(pl -> pl.getDiceRoll() > 0).count();
+        long ready = room.getGameState().getPlayers().stream().filter(pl -> pl.getDiceRoll() != 0).count();
         int total = room.getGameState().getPlayers().size();
 
         if (ready == total && total >= Room.MIN_PLAYERS) {
+            generateBalancedRolls(room);
+
             room.setGameStarted(true);
             new PregameController(room.getGameState()).process();
 
             for (WebSocketSession s : room.getSessions()) {
                 Player player = room.getPlayer(s);
-                sendJson(s, Map.of("type", "SETUP_PHASE", "myRole", player.getRole()));
+                Map<String, Object> msg = new HashMap<>();
+                msg.put("type", "DICE_ROLLED");
+                msg.put("myDice", player.getDiceRoll());
+                msg.put("myRole", player.getRole());
+                sendJson(s, msg);
             }
 
-            broadcastJson(room, Map.of("type", "GAME_START"));
-            startNightPhaseLoop(room);
+            scheduler.schedule(() -> {
+                broadcastJson(room, Map.of("type", "GAME_START"));
+                startNightPhaseLoop(room);
+            }, 4, TimeUnit.SECONDS);
         }
+    }
+
+    private void generateBalancedRolls(Room room) {
+        List<Player> players = room.getGameState().getPlayers();
+        int n = players.size();
+        int phases = room.getPhaseCount();
+        int maxPerPhase = (int) Math.ceil(n / 2.0);
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
+
+        int[] rolls = new int[n];
+        for (int attempt = 0; attempt < 100; attempt++) {
+            for (int i = 0; i < n; i++) rolls[i] = rng.nextInt(1, phases + 1);
+            if (isBalanced(rolls, n, phases, maxPerPhase)) break;
+        }
+
+        for (int i = 0; i < n; i++) {
+            Player p = players.get(i);
+            p.setDiceRoll(rolls[i]);
+            room.getGameState().setPlayerAtTime(p, rolls[i]);
+        }
+    }
+
+    private boolean isBalanced(int[] rolls, int n, int phases, int maxPerPhase) {
+        Map<Integer, Integer> counts = new HashMap<>();
+        for (int r : rolls) counts.merge(r, 1, Integer::sum);
+
+        // Reject: all same number
+        if (counts.size() == 1) return false;
+
+        // Reject: all unique when players <= phases (everyone alone, too many peeks)
+        if (counts.size() == n && n <= phases) return false;
+
+        // Reject: any phase has more than ceil(N/2) players
+        for (int c : counts.values()) {
+            if (c > maxPerPhase) return false;
+        }
+
+        return true;
     }
 
     private void startNightPhaseLoop(Room room) {
@@ -375,7 +417,7 @@ public class GameService {
     private void broadcastReadyCount(Room room) {
         GameState gs = room.getGameState();
         List<String> readyNames = gs.getPlayers().stream()
-                .filter(p -> p.getDiceRoll() > 0).map(Player::getName).toList();
+                .filter(p -> p.getDiceRoll() != 0).map(Player::getName).toList();
         Map<String, Object> msg = new HashMap<>();
         msg.put("type", "READY_COUNT");
         msg.put("count", readyNames.size());

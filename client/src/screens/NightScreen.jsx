@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import DiamondPedestal from '../components/DiamondPedestal';
+import VaultCracker from '../components/VaultCracker';
 
 export default function NightScreen() {
     const { nightData, send, roomCode, players, playerName, isHost, isPaused } = useGame();
@@ -52,6 +53,7 @@ export default function NightScreen() {
                         <span>Your shift: <strong>{myDice}</strong></span>
                     </div>
                 </div>
+                <VaultCracker />
                 {isHost && <button onClick={togglePause} style={s.btnPause}>{isPaused ? '\u{25B6} Resume' : '\u{23F8} Pause'}</button>}
             </div>
         );
