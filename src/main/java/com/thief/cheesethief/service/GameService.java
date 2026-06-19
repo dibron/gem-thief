@@ -33,7 +33,14 @@ public class GameService {
     public void joinRoom(String roomId, WebSocketSession session, String name) {
         Room room = rooms.get(roomId);
         if (room == null) { sendError(session, "Room not found"); return; }
-        if (room.isGameStarted()) { sendError(session, "Heist already in progress"); return; }
+
+        boolean isReconnect = room.getGameState().getPlayers().stream()
+                .anyMatch(p -> p.getName().equalsIgnoreCase(name));
+
+        if (room.isGameStarted() && !isReconnect) {
+            sendError(session, "Heist already in progress");
+            return;
+        }
 
         try {
             room.addPlayer(session, name);
@@ -99,8 +106,6 @@ public class GameService {
         broadcastNightUpdate(room, phase);
         scheduler.schedule(() -> runPhase(room, nightCtrl, phase + 1), 10, TimeUnit.SECONDS);
     }
-
-    // --- FOLLOWER PHASE ---
 
     private void startFollowerPhase(Room room) {
         GameState gs = room.getGameState();
@@ -274,7 +279,6 @@ public class GameService {
         }
     }
 
-    // --- VOTING ---
 
     public void castVote(String roomId, WebSocketSession session, String targetName) {
         Room room = rooms.get(roomId);

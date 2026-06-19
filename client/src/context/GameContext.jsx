@@ -3,16 +3,24 @@ import React, { createContext, useContext, useState, useRef, useEffect, useCallb
 const GameContext = createContext();
 export function useGame() { return useContext(GameContext); }
 
+function saveSession(roomCode, playerName, isHost) {
+    sessionStorage.setItem('vault-session', JSON.stringify({ roomCode, playerName, isHost }));
+}
+function loadSession() {
+    try { return JSON.parse(sessionStorage.getItem('vault-session')); } catch { return null; }
+}
+function clearSession() { sessionStorage.removeItem('vault-session'); }
+
 export function GameProvider({ children }) {
     const [screen, setScreen] = useState('home');
     const [playerName, setPlayerName] = useState('');
     const [roomCode, setRoomCode] = useState('');
     const [isHost, setIsHost] = useState(false);
     const [players, setPlayers] = useState([]);
-    const [lobbyInfo, setLobbyInfo] = useState({ min: 5, max: 8 });
-    const [readyCount, setReadyCount] = useState({ count: 0, total: 5, readyPlayers: [] });
+    const [lobbyInfo, setLobbyInfo] = useState({ min: 4, max: 8 });
+    const [readyCount, setReadyCount] = useState({ count: 0, total: 4, readyPlayers: [] });
     const [isPaused, setIsPaused] = useState(false);
-    const [voteCount, setVoteCount] = useState({ count: 0, total: 5 });
+    const [voteCount, setVoteCount] = useState({ count: 0, total: 4 });
     const [gameResult, setGameResult] = useState(null);
     const [followerData, setFollowerData] = useState(null);
     const [insiderData, setInsiderData] = useState(null);
@@ -24,6 +32,7 @@ export function GameProvider({ children }) {
     });
 
     const socketRef = useRef(null);
+    const intentionalClose = useRef(false);
 
     const handleMsg = useCallback((event) => {
         const d = JSON.parse(event.data);
@@ -31,7 +40,7 @@ export function GameProvider({ children }) {
         switch (d.type) {
             case 'LOBBY_UPDATE':
                 setPlayers(d.players.map((name, i) => ({ id: i, name, isHost: name === d.hostName })));
-                setLobbyInfo({ min: d.minPlayers || 5, max: d.maxPlayers || 8 });
+                setLobbyInfo({ min: d.minPlayers || 4, max: d.maxPlayers || 8 });
                 setScreen(prev => prev === 'home' ? 'lobby' : prev);
                 break;
 
@@ -103,8 +112,8 @@ export function GameProvider({ children }) {
             case 'GAME_RESTART':
                 setScreen('lobby');
                 setNightData({ phase: 0, myRole: '', myDice: 0, isAwake: false, awakeWithMe: [], canPeek: false, gemStatus: '', conmanName: '', peekResult: '' });
-                setReadyCount({ count: 0, total: 5, readyPlayers: [] });
-                setVoteCount({ count: 0, total: 5 });
+                setReadyCount({ count: 0, total: 4, readyPlayers: [] });
+                setVoteCount({ count: 0, total: 4 });
                 setGameResult(null);
                 setFollowerData(null);
                 setInsiderData(null);
@@ -112,20 +121,35 @@ export function GameProvider({ children }) {
                 break;
 
             case 'PLAYER_LEFT': break;
-            case 'ERROR': alert(d.message); break;
+            case 'ERROR':
+                clearSession();
+                alert(d.message);
+                break;
             default: break;
         }
     }, []);
 
-    const connectWebSocket = useCallback((onOpen) => {
-        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) { onOpen(socketRef.current); return; }
+    const connectAndJoin = useCallback((roomId, name, host) => {
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+            socketRef.current.send(JSON.stringify({ action: "JOIN", roomId, name }));
+            return;
+        }
         if (socketRef.current) { socketRef.current.close(); socketRef.current = null; }
-        const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsHost = import.meta.env.VITE_API_URL || window.location.host;
-        const ws = new WebSocket(`${wsProto}//${wsHost}/ws/game`);
-        ws.onopen = () => onOpen(ws);
+
+        intentionalClose.current = false;
+        const wsUrl = import.meta.env.VITE_WS_URL || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws/game`;
+        const ws = new WebSocket(wsUrl);
+        ws.onopen = () => {
+            ws.send(JSON.stringify({ action: "JOIN", roomId, name }));
+            saveSession(roomId, name, host);
+        };
         ws.onmessage = handleMsg;
-        ws.onclose = () => { socketRef.current = null; setScreen('home'); };
+        ws.onclose = () => {
+            socketRef.current = null;
+            if (!intentionalClose.current) {
+                setScreen('home');
+            }
+        };
         socketRef.current = ws;
     }, [handleMsg]);
 
@@ -135,16 +159,28 @@ export function GameProvider({ children }) {
     }, []);
 
     const leaveGame = useCallback(() => {
+        intentionalClose.current = true;
+        clearSession();
         if (socketRef.current) { socketRef.current.close(); socketRef.current = null; }
         setScreen('home'); setPlayers([]); setRoomCode(''); setPlayerName('');
         setIsHost(false); setGameResult(null); setFollowerData(null); setInsiderData(null);
     }, []);
 
-    useEffect(() => () => { if (socketRef.current) socketRef.current.close(); }, []);
+    // Auto-reconnect on mount
+    useEffect(() => {
+        const saved = loadSession();
+        if (saved && saved.roomCode && saved.playerName) {
+            setPlayerName(saved.playerName);
+            setRoomCode(saved.roomCode);
+            setIsHost(saved.isHost);
+            connectAndJoin(saved.roomCode, saved.playerName, saved.isHost);
+        }
+        return () => { if (socketRef.current) socketRef.current.close(); };
+    }, []);
 
     return <GameContext.Provider value={{
         screen, playerName, setPlayerName, roomCode, setRoomCode,
-        isHost, setIsHost, players, lobbyInfo, connectWebSocket, send,
+        isHost, setIsHost, players, lobbyInfo, connectAndJoin, send,
         readyCount, nightData, isPaused, voteCount, gameResult,
         followerData, insiderData, leaveGame
     }}>{children}</GameContext.Provider>;

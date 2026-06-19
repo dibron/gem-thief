@@ -33,9 +33,16 @@ public class Room {
     public GameState getGameState() { return gameState; }
 
     public void addPlayer(WebSocketSession session, String name) {
-        boolean exists = gameState.getPlayers().stream()
-                .anyMatch(p -> p.getName().equalsIgnoreCase(name));
-        if (exists) throw new RuntimeException("Name already taken");
+        Player existing = gameState.getPlayers().stream()
+                .filter(p -> p.getName().equalsIgnoreCase(name))
+                .findFirst().orElse(null);
+
+        if (existing != null) {
+            sessionToPlayer.entrySet().removeIf(e -> e.getValue() == existing);
+            sessionToPlayer.put(session, existing);
+            return;
+        }
+
         if (gameState.getPlayers().size() >= MAX_PLAYERS)
             throw new RuntimeException("Room is full (max " + MAX_PLAYERS + ")");
 

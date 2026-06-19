@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 
 export default function HomeScreen() {
-    const { setPlayerName, setRoomCode, setIsHost, connectWebSocket } = useGame();
+    const { setPlayerName, setRoomCode, setIsHost, connectAndJoin } = useGame();
     const [name, setName] = useState('');
     const [code, setCode] = useState('');
     const [joining, setJoining] = useState(false);
@@ -10,17 +10,14 @@ export default function HomeScreen() {
 
     const doJoin = (roomId, nameVal, host) => {
         setPlayerName(nameVal); setRoomCode(roomId); setIsHost(host);
-        connectWebSocket((ws) => {
-            ws.send(JSON.stringify({ action: "JOIN", roomId, name: nameVal }));
-        });
+        connectAndJoin(roomId, nameVal, host);
     };
 
     const handleCreate = async () => {
         if (!name.trim()) return alert("Enter your codename!");
         setLoading(true);
         try {
-            const apiBase = import.meta.env.VITE_API_URL ? `https://${import.meta.env.VITE_API_URL}` : '';
-            const res = await fetch(`${apiBase}/api/room/create`, { method: 'POST' });
+            const res = await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/room/create`, { method: 'POST' });
             doJoin(await res.text(), name.trim(), true);
         } catch { alert("Cannot reach the server."); setLoading(false); }
     };
