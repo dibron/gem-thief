@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
+import DiamondPedestal from '../components/DiamondPedestal';
 
 export default function NightScreen() {
     const { nightData, send, roomCode, players, playerName, isHost, isPaused } = useGame();
-    const { phase, myRole, myDice, isAwake, awakeWithMe, canPeek, gemStatus, conmanName, peekResult } = nightData;
+    const { phase, totalPhases, myRole, myDice, isAwake, awakeWithMe, canPeek, gemStatus, conmanName, peekResult } = nightData;
     const [timeLeft, setTimeLeft] = useState(10);
 
     useEffect(() => { if (phase > 0) setTimeLeft(10); }, [phase]);
@@ -38,7 +39,7 @@ export default function NightScreen() {
         return (
             <div style={s.page('#060810')}>
                 <div style={s.shiftBar}>
-                    <span style={s.shiftLabel}>Shift {phase}/6</span>
+                    <span style={s.shiftLabel}>Shift {phase}/{totalPhases}</span>
                     <span style={{ ...s.timer, color: timeLeft <= 3 ? '#ef4444' : '#4b5563' }}>{timeLeft}s</span>
                 </div>
                 {isPaused && <div style={s.pauseBanner}>PAUSED</div>}
@@ -60,7 +61,7 @@ export default function NightScreen() {
     return (
         <div style={s.page('#0d1117')}>
             <div style={s.shiftBar}>
-                <span style={s.shiftLabel}>Shift {phase}/6</span>
+                <span style={s.shiftLabel}>Shift {phase}/{totalPhases}</span>
                 <span style={{ ...s.timer, color: timeLeft <= 3 ? '#ef4444' : '#eab308' }}>{timeLeft}s</span>
             </div>
             {isPaused && <div style={s.pauseBanner}>PAUSED</div>}
@@ -69,18 +70,7 @@ export default function NightScreen() {
                 <div style={{ fontSize: '2rem' }}>&#x1F6A8;</div>
                 <h2 style={{ color: '#fef3c7', margin: '4px 0 8px' }}>On Patrol!</h2>
 
-                <div style={s.section}>
-                    <h4 style={s.secTitle}>&#x1F48E; DIAMOND STATUS</h4>
-                    {gemStatus === 'SAFE' && <p style={{ color: '#4ade80', fontWeight: 700 }}>Diamond secure in the vault.</p>}
-                    {gemStatus === 'MISSING' && <p style={{ color: '#6b7280', fontWeight: 700 }}>The vault is empty — diamond is gone!</p>}
-                    {gemStatus === 'STOLEN_NOW' && (
-                        <p style={{ color: '#ef4444', fontWeight: 700, fontSize: '1.1rem' }}>
-                            {conmanName === playerName
-                                ? '\u{1F3AD} You grabbed the diamond!'
-                                : `\u{1F6A8} ${conmanName} just took the diamond!`}
-                        </p>
-                    )}
-                </div>
+                <DiamondPedestal status={gemStatus} conmanName={conmanName} playerName={playerName} />
 
                 <div style={s.section}>
                     <h4 style={s.secTitle}>&#x1F441;&#xFE0F; GUARDS ON PATROL</h4>

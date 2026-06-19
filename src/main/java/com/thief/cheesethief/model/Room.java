@@ -15,9 +15,12 @@ public class Room {
     private volatile boolean nightRunning;
     private volatile boolean followerPhase;
     private String hostName;
+    private volatile int phaseCount = 6;
 
-     public static final int MIN_PLAYERS = 4;
+    public static final int MIN_PLAYERS = 4;
     public static final int MAX_PLAYERS = 8;
+    public static final int MIN_PHASES = 2;
+    public static final int MAX_PHASES = 10;
 
     public Room(String roomId) {
         this.roomId = roomId;
@@ -82,6 +85,11 @@ public class Room {
     public boolean isHost(WebSocketSession session) {
         Player p = sessionToPlayer.get(session);
         return p != null && p.getName().equalsIgnoreCase(hostName);
+    }
+
+    public int getPhaseCount() { return phaseCount; }
+    public void setPhaseCount(int phaseCount) {
+        this.phaseCount = Math.max(MIN_PHASES, Math.min(MAX_PHASES, phaseCount));
     }
 
     public void resetForNewGame() {

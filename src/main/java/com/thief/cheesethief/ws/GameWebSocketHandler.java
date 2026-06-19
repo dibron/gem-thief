@@ -60,6 +60,10 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                     String target = node.path("targetName").asText("");
                     gameService.castVote(roomId, session, target);
                 }
+                case "SET_PHASES" -> {
+                    int count = node.path("count").asInt(6);
+                    gameService.setPhases(roomId, session, count);
+                }
                 case "TOGGLE_PAUSE" -> gameService.togglePause(roomId, session);
                 case "RESTART" -> gameService.restartGame(roomId, session);
                 default -> {

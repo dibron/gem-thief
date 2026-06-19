@@ -57,7 +57,7 @@ public class GameService {
 
         Player p = room.getPlayer(session);
         if (p == null || p.getDiceRoll() != 0) return;
-        if (roll < 1 || roll > 6) return;
+        if (roll < 1 || roll > room.getPhaseCount()) return;
 
         p.setDiceRoll(roll);
         room.getGameState().setPlayerAtTime(p, roll);
@@ -96,7 +96,7 @@ public class GameService {
             return;
         }
 
-        if (phase > 6) {
+        if (phase > room.getPhaseCount()) {
             room.setNightRunning(false);
             startFollowerPhase(room);
             return;
@@ -242,6 +242,7 @@ public class GameService {
             Map<String, Object> msg = new HashMap<>();
             msg.put("type", "NIGHT_UPDATE");
             msg.put("phase", phaseNum);
+            msg.put("totalPhases", room.getPhaseCount());
             msg.put("isAwake", isAwake);
 
             if (isAwake) {
@@ -347,6 +348,16 @@ public class GameService {
         broadcastJson(room, Map.of("type", "PAUSE_UPDATE", "paused", newState));
     }
 
+    public void setPhases(String roomId, WebSocketSession session, int count) {
+        Room room = rooms.get(roomId);
+        if (room == null) return;
+        if (!room.isHost(session)) { sendError(session, "Only the lead guard can change phases"); return; }
+        if (room.isGameStarted()) { sendError(session, "Can't change phases during a heist"); return; }
+
+        room.setPhaseCount(count);
+        broadcastLobby(room);
+    }
+
     // --- BROADCAST HELPERS ---
 
     public void broadcastLobby(Room room) {
@@ -357,6 +368,7 @@ public class GameService {
         msg.put("hostName", room.getHostName() != null ? room.getHostName() : "");
         msg.put("minPlayers", Room.MIN_PLAYERS);
         msg.put("maxPlayers", Room.MAX_PLAYERS);
+        msg.put("phaseCount", room.getPhaseCount());
         broadcastJson(room, msg);
     }
 

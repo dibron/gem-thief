@@ -17,7 +17,7 @@ export function GameProvider({ children }) {
     const [roomCode, setRoomCode] = useState('');
     const [isHost, setIsHost] = useState(false);
     const [players, setPlayers] = useState([]);
-    const [lobbyInfo, setLobbyInfo] = useState({ min: 4, max: 8 });
+    const [lobbyInfo, setLobbyInfo] = useState({ min: 4, max: 8, phaseCount: 6 });
     const [readyCount, setReadyCount] = useState({ count: 0, total: 4, readyPlayers: [] });
     const [isPaused, setIsPaused] = useState(false);
     const [voteCount, setVoteCount] = useState({ count: 0, total: 4 });
@@ -26,7 +26,7 @@ export function GameProvider({ children }) {
     const [insiderData, setInsiderData] = useState(null);
 
     const [nightData, setNightData] = useState({
-        phase: 0, myRole: '', myDice: 0,
+        phase: 0, totalPhases: 6, myRole: '', myDice: 0,
         isAwake: false, awakeWithMe: [], canPeek: false,
         gemStatus: '', conmanName: '', peekResult: ''
     });
@@ -40,7 +40,7 @@ export function GameProvider({ children }) {
         switch (d.type) {
             case 'LOBBY_UPDATE':
                 setPlayers(d.players.map((name, i) => ({ id: i, name, isHost: name === d.hostName })));
-                setLobbyInfo({ min: d.minPlayers || 4, max: d.maxPlayers || 8 });
+                setLobbyInfo({ min: d.minPlayers || 4, max: d.maxPlayers || 8, phaseCount: d.phaseCount || 6 });
                 setScreen(prev => prev === 'home' ? 'lobby' : prev);
                 break;
 
@@ -62,7 +62,7 @@ export function GameProvider({ children }) {
 
             case 'NIGHT_UPDATE':
                 setNightData(prev => ({
-                    ...prev, phase: d.phase, isAwake: d.isAwake,
+                    ...prev, phase: d.phase, totalPhases: d.totalPhases || prev.totalPhases, isAwake: d.isAwake,
                     awakeWithMe: d.awakeWithMe || [], canPeek: d.canPeek || false,
                     gemStatus: d.gemStatus || '', conmanName: d.conmanName || '',
                     peekResult: ''
@@ -111,7 +111,7 @@ export function GameProvider({ children }) {
 
             case 'GAME_RESTART':
                 setScreen('lobby');
-                setNightData({ phase: 0, myRole: '', myDice: 0, isAwake: false, awakeWithMe: [], canPeek: false, gemStatus: '', conmanName: '', peekResult: '' });
+                setNightData({ phase: 0, totalPhases: 6, myRole: '', myDice: 0, isAwake: false, awakeWithMe: [], canPeek: false, gemStatus: '', conmanName: '', peekResult: '' });
                 setReadyCount({ count: 0, total: 4, readyPlayers: [] });
                 setVoteCount({ count: 0, total: 4 });
                 setGameResult(null);
