@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h2>Cheese Thief</h2>
+<input id="room" placeholder="Room ID"/>
+<input id="name" placeholder="Name"/>
+
+<button onclick="createRoom()">Create Room</button>
+<button onclick="join()">Join</button>
+<button onclick="start()">Start</button>
+
+<script>
+    let ws = new WebSocket("ws://localhost:8080/ws/game");
+    let roomId = "";
+
+    function createRoom() {
+
+        let name = document.getElementById("name").value;
+
+        ws.send(JSON.stringify({
+            type: "CREATE",
+            name
+        }));
+    }
+
+    ws.onmessage = (e) => {
+        let data = JSON.parse(e.data);
+
+        if (data.roomId) {
+            roomId = data.roomId;
+            document.getElementById("room").value = roomId;
+        } else {
+            document.getElementById("output").innerText = JSON.stringify(data, null, 2);
+        }
+    };
+
+    function join() {
+        roomId = document.getElementById("room").value;
+        let name = document.getElementById("name").value;
+
+        ws.send(JSON.stringify({
+            type: "JOIN",
+            roomId,
+            name
+        }));
+    }
+
+    function start() {
+        ws.send(JSON.stringify({
+            type: "START",
+            roomId
+        }));
+    }
+</script>
+
+</body>
+</html>
