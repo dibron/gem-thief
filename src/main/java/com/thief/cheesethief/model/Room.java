@@ -13,7 +13,11 @@ public class Room {
     private volatile boolean gameStarted;
     private volatile boolean paused;
     private volatile boolean nightRunning;
+    private volatile boolean followerPhase;
     private String hostName;
+
+    public static final int MIN_PLAYERS = 5;
+    public static final int MAX_PLAYERS = 8;
 
     public Room(String roomId) {
         this.roomId = roomId;
@@ -22,6 +26,7 @@ public class Room {
         this.gameStarted = false;
         this.paused = false;
         this.nightRunning = false;
+        this.followerPhase = false;
     }
 
     public String getRoomId() { return roomId; }
@@ -31,6 +36,8 @@ public class Room {
         boolean exists = gameState.getPlayers().stream()
                 .anyMatch(p -> p.getName().equalsIgnoreCase(name));
         if (exists) throw new RuntimeException("Name already taken");
+        if (gameState.getPlayers().size() >= MAX_PLAYERS)
+            throw new RuntimeException("Room is full (max " + MAX_PLAYERS + ")");
 
         Player player = new Player(name);
         gameState.addPlayer(player);
@@ -38,15 +45,21 @@ public class Room {
     }
 
     public Player getPlayer(WebSocketSession session) { return sessionToPlayer.get(session); }
+
+    public WebSocketSession getSession(Player player) {
+        return sessionToPlayer.entrySet().stream()
+                .filter(e -> e.getValue() == player)
+                .map(Map.Entry::getKey)
+                .findFirst().orElse(null);
+    }
+
     public Collection<WebSocketSession> getSessions() { return sessionToPlayer.keySet(); }
     public boolean isGameStarted() { return gameStarted; }
     public void setGameStarted(boolean gameStarted) { this.gameStarted = gameStarted; }
 
     public void removePlayer(WebSocketSession session) {
         Player player = sessionToPlayer.remove(session);
-        if (player != null) {
-            gameState.getPlayers().remove(player);
-        }
+        if (player != null) gameState.getPlayers().remove(player);
     }
 
     public boolean isEmpty() { return sessionToPlayer.isEmpty(); }
@@ -54,6 +67,8 @@ public class Room {
     public void setPaused(boolean paused) { this.paused = paused; }
     public boolean isNightRunning() { return nightRunning; }
     public void setNightRunning(boolean nightRunning) { this.nightRunning = nightRunning; }
+    public boolean isFollowerPhase() { return followerPhase; }
+    public void setFollowerPhase(boolean followerPhase) { this.followerPhase = followerPhase; }
     public String getHostName() { return hostName; }
     public void setHostName(String hostName) { this.hostName = hostName; }
 
@@ -67,5 +82,6 @@ public class Room {
         gameStarted = false;
         paused = false;
         nightRunning = false;
+        followerPhase = false;
     }
 }

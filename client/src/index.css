@@ -2,8 +2,8 @@
 
 body {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  background: #0f0a1a;
-  color: #e0d6f0;
+  background: #080b14;
+  color: #c8d6e5;
   min-height: 100vh;
 }
 
@@ -21,13 +21,8 @@ button {
   cursor: pointer;
   transition: transform 0.1s, box-shadow 0.15s, background-color 0.2s;
 }
-button:active:not(:disabled) {
-  transform: scale(0.96);
-}
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
+button:active:not(:disabled) { transform: scale(0.96); }
+button:disabled { cursor: not-allowed; opacity: 0.5; }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(12px); }
@@ -35,14 +30,18 @@ button:disabled {
 }
 @keyframes pulse {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+  50% { transform: scale(1.08); }
 }
 @keyframes shake {
   0%, 100% { transform: rotate(0deg); }
-  25% { transform: rotate(-12deg); }
-  75% { transform: rotate(12deg); }
+  25% { transform: rotate(-15deg); }
+  75% { transform: rotate(15deg); }
 }
 @keyframes glow {
-  0%, 100% { box-shadow: 0 0 8px rgba(170, 59, 255, 0.3); }
-  50% { box-shadow: 0 0 20px rgba(170, 59, 255, 0.6); }
+  0%, 100% { box-shadow: 0 0 8px rgba(234,179,8,0.3); }
+  50% { box-shadow: 0 0 24px rgba(234,179,8,0.6); }
+}
+@keyframes scanline {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 4px; }
 }

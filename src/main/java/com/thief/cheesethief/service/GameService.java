@@ -32,23 +32,12 @@ public class GameService {
 
     public void joinRoom(String roomId, WebSocketSession session, String name) {
         Room room = rooms.get(roomId);
-        if (room == null) {
-            sendError(session, "Room not found");
-            return;
-        }
-        if (room.isGameStarted()) {
-            sendError(session, "Game already in progress");
-            return;
-        }
-        if (room.getGameState().getPlayers().size() >= 4) {
-            sendError(session, "Room is full");
-            return;
-        }
+        if (room == null) { sendError(session, "Room not found"); return; }
+        if (room.isGameStarted()) { sendError(session, "Heist already in progress"); return; }
+
         try {
             room.addPlayer(session, name);
-            if (room.getHostName() == null) {
-                room.setHostName(name);
-            }
+            if (room.getHostName() == null) room.setHostName(name);
             broadcastLobby(room);
         } catch (Exception e) {
             sendError(session, e.getMessage());
@@ -72,14 +61,13 @@ public class GameService {
         long ready = room.getGameState().getPlayers().stream().filter(pl -> pl.getDiceRoll() > 0).count();
         int total = room.getGameState().getPlayers().size();
 
-        if (ready == total && total >= 4) {
+        if (ready == total && total >= Room.MIN_PLAYERS) {
             room.setGameStarted(true);
             new PregameController(room.getGameState()).process();
 
             for (WebSocketSession s : room.getSessions()) {
                 Player player = room.getPlayer(s);
-                String role = player.isThief() ? "THIEF" : "SLEEPYHEAD";
-                sendJson(s, Map.of("type", "SETUP_PHASE", "myRole", role));
+                sendJson(s, Map.of("type", "SETUP_PHASE", "myRole", player.getRole()));
             }
 
             broadcastJson(room, Map.of("type", "GAME_START"));
@@ -103,7 +91,7 @@ public class GameService {
 
         if (phase > 6) {
             room.setNightRunning(false);
-            broadcastJson(room, Map.of("type", "DAY_PHASE"));
+            startFollowerPhase(room);
             return;
         }
 
@@ -112,13 +100,124 @@ public class GameService {
         scheduler.schedule(() -> runPhase(room, nightCtrl, phase + 1), 10, TimeUnit.SECONDS);
     }
 
+    // --- FOLLOWER PHASE ---
+
+    private void startFollowerPhase(Room room) {
+        room.setFollowerPhase(true);
+        GameState gs = room.getGameState();
+        Player conman = gs.getConman();
+        WebSocketSession conmanSession = room.getSession(conman);
+
+        List<String> candidates = gs.getPlayers().stream()
+                .filter(p -> !p.isConman())
+                .map(Player::getName).toList();
+
+        if (conmanSession != null) {
+            Map<String, Object> msg = new HashMap<>();
+            msg.put("type", "FOLLOWER_PHASE");
+            msg.put("candidates", candidates);
+            msg.put("requiredFollowers", gs.getRequiredFollowers());
+            sendJson(conmanSession, msg);
+        }
+
+        for (WebSocketSession s : room.getSessions()) {
+            Player p = room.getPlayer(s);
+            if (p != null && !p.isConman()) {
+                sendJson(s, Map.of("type", "FOLLOWER_WAIT"));
+            }
+        }
+
+        scheduler.schedule(() -> {
+            if (room.isFollowerPhase()) {
+                autoPickFollowers(room);
+            }
+        }, 30, TimeUnit.SECONDS);
+    }
+
+    public void chooseFollower(String roomId, WebSocketSession session, List<String> followerNames) {
+        Room room = rooms.get(roomId);
+        if (room == null || !room.isFollowerPhase()) return;
+
+        Player conman = room.getGameState().getConman();
+        Player sender = room.getPlayer(session);
+        if (sender == null || sender != conman) return;
+
+        GameState gs = room.getGameState();
+        int required = gs.getRequiredFollowers();
+
+        int picked = 0;
+        for (String name : followerNames) {
+            if (picked >= required) break;
+            Player target = gs.getPlayers().stream()
+                    .filter(p -> p.getName().equals(name) && !p.isConman() && !p.isFollower())
+                    .findFirst().orElse(null);
+            if (target != null) {
+                gs.addFollower(target);
+                picked++;
+            }
+        }
+
+        finishFollowerPhase(room);
+    }
+
+    private void autoPickFollowers(Room room) {
+        GameState gs = room.getGameState();
+        if (!room.isFollowerPhase()) return;
+
+        int needed = gs.getRequiredFollowers() - gs.getFollowers().size();
+        if (needed > 0) {
+            List<Player> candidates = gs.getPlayers().stream()
+                    .filter(p -> !p.isConman() && !p.isFollower()).toList();
+            Collections.shuffle(new ArrayList<>(candidates));
+            for (int i = 0; i < Math.min(needed, candidates.size()); i++) {
+                gs.addFollower(candidates.get(i));
+            }
+        }
+        finishFollowerPhase(room);
+    }
+
+    private void finishFollowerPhase(Room room) {
+        room.setFollowerPhase(false);
+        GameState gs = room.getGameState();
+
+        Player conman = gs.getConman();
+        List<String> followerNames = gs.getFollowers().stream().map(Player::getName).toList();
+
+        WebSocketSession conmanSession = room.getSession(conman);
+        if (conmanSession != null) {
+            sendJson(conmanSession, Map.of("type", "FOLLOWERS_CHOSEN", "followers", followerNames));
+        }
+
+        for (Player f : gs.getFollowers()) {
+            WebSocketSession fs = room.getSession(f);
+            if (fs != null) {
+                Map<String, Object> msg = new HashMap<>();
+                msg.put("type", "YOU_ARE_INSIDER");
+                msg.put("conmanName", conman.getName());
+                msg.put("otherInsiders", followerNames.stream().filter(n -> !n.equals(f.getName())).toList());
+                sendJson(fs, msg);
+            }
+        }
+
+        scheduler.schedule(() -> {
+            for (WebSocketSession s : room.getSessions()) {
+                Player p = room.getPlayer(s);
+                if (p != null) {
+                    sendJson(s, Map.of("type", "DAY_PHASE", "myRole", p.getRole()));
+                }
+            }
+        }, 5, TimeUnit.SECONDS);
+    }
+
+    // --- NIGHT BROADCAST ---
+
     private void broadcastNightUpdate(Room room, int phaseNum) {
         GameState gs = room.getGameState();
         List<Player> awakeNow = gs.getPlayersAtTime().getOrDefault(phaseNum, List.of());
 
         boolean gemSafe = !gs.isGemStolen();
-        Player thief = gs.getThief();
-        boolean stolenNow = thief != null && gs.getMessages(thief).contains("STOLEN_THIS_PHASE");
+        Player conman = gs.getConman();
+        boolean stolenNow = conman != null && gs.getMessages(conman).contains("STOLEN_THIS_PHASE");
         if (stolenNow) gs.clearMessages();
 
         for (WebSocketSession s : room.getSessions()) {
@@ -135,13 +234,13 @@ public class GameService {
                 List<String> others = awakeNow.stream()
                         .filter(x -> x != p).map(Player::getName).toList();
                 msg.put("awakeWithMe", others);
-                msg.put("canPeek", others.isEmpty() && !p.isThief());
+                msg.put("canPeek", others.isEmpty() && !p.isConman());
 
                 if (gemSafe) {
                     msg.put("gemStatus", "SAFE");
                 } else if (stolenNow) {
                     msg.put("gemStatus", "STOLEN_NOW");
-                    msg.put("thiefName", thief.getName());
+                    msg.put("conmanName", conman.getName());
                 } else {
                     msg.put("gemStatus", "MISSING");
                 }
@@ -161,10 +260,12 @@ public class GameService {
         if (target != null) {
             sendJson(session, Map.of(
                 "type", "PEEK_RESULT",
-                "message", target.getName() + " wakes up in Phase " + target.getDiceRoll() + "."
+                "message", target.getName() + " patrols during Shift " + target.getDiceRoll() + "."
             ));
         }
     }
+
+    // --- VOTING ---
 
     public void castVote(String roomId, WebSocketSession session, String targetName) {
         Room room = rooms.get(roomId);
@@ -172,61 +273,51 @@ public class GameService {
 
         Player voter = room.getPlayer(session);
         if (voter == null || voter.hasVoted()) return;
-        if (voter.getName().equals(targetName)) {
-            sendError(session, "You can't vote for yourself");
-            return;
-        }
+        if (voter.getName().equals(targetName)) { sendError(session, "Can't vote for yourself"); return; }
 
         GameState gs = room.getGameState();
-        boolean targetExists = gs.getPlayers().stream().anyMatch(p -> p.getName().equals(targetName));
-        if (!targetExists) return;
+        if (gs.getPlayers().stream().noneMatch(p -> p.getName().equals(targetName))) return;
 
         voter.setHasVoted(true);
         gs.castVote(voter.getName(), targetName);
 
         int votesSoFar = gs.getVoteCount();
         int totalPlayers = gs.getPlayers().size();
-
         broadcastJson(room, Map.of("type", "VOTE_COUNT", "count", votesSoFar, "total", totalPlayers));
 
-        if (votesSoFar >= totalPlayers) {
-            resolveVotes(room);
-        }
+        if (votesSoFar >= totalPlayers) resolveVotes(room);
     }
 
     private void resolveVotes(Room room) {
         GameState gs = room.getGameState();
         String eliminated = gs.getMostVotedPlayer();
-        Player thief = gs.getThief();
-        boolean thiefCaught = eliminated != null && eliminated.equals(thief.getName());
+        Player conman = gs.getConman();
+        boolean conmanCaught = eliminated != null && eliminated.equals(conman.getName());
         boolean gemStolen = gs.isGemStolen();
 
-        // Sleepyheads win if they catch the thief.
-        // Thief wins if they voted out a non-thief (or if gem was stolen and thief not caught).
-        boolean sleepyheadsWin = thiefCaught;
+        boolean guardsWin = conmanCaught;
+
+        List<String> followerNames = gs.getFollowers().stream().map(Player::getName).toList();
 
         Map<String, Object> result = new HashMap<>();
         result.put("type", "GAME_OVER");
         result.put("eliminated", eliminated != null ? eliminated : "nobody");
-        result.put("thiefName", thief.getName());
-        result.put("thiefCaught", thiefCaught);
+        result.put("conmanName", conman.getName());
+        result.put("followers", followerNames);
+        result.put("conmanCaught", conmanCaught);
         result.put("gemStolen", gemStolen);
-        result.put("sleepyheadsWin", sleepyheadsWin);
-
-        Map<String, String> allVotes = new HashMap<>(gs.getVotes());
-        result.put("votes", allVotes);
+        result.put("guardsWin", guardsWin);
+        result.put("votes", new HashMap<>(gs.getVotes()));
 
         broadcastJson(room, result);
     }
 
+    // --- ADMIN ---
+
     public void restartGame(String roomId, WebSocketSession session) {
         Room room = rooms.get(roomId);
         if (room == null) return;
-
-        if (!room.isHost(session)) {
-            sendError(session, "Only the host can restart");
-            return;
-        }
+        if (!room.isHost(session)) { sendError(session, "Only the lead guard can restart"); return; }
 
         room.resetForNewGame();
         broadcastJson(room, Map.of("type", "GAME_RESTART"));
@@ -236,16 +327,14 @@ public class GameService {
     public void togglePause(String roomId, WebSocketSession session) {
         Room room = rooms.get(roomId);
         if (room == null) return;
-
-        if (!room.isHost(session)) {
-            sendError(session, "Only the host can pause");
-            return;
-        }
+        if (!room.isHost(session)) { sendError(session, "Only the lead guard can pause"); return; }
 
         boolean newState = !room.isPaused();
         room.setPaused(newState);
         broadcastJson(room, Map.of("type", "PAUSE_UPDATE", "paused", newState));
     }
+
+    // --- BROADCAST HELPERS ---
 
     public void broadcastLobby(Room room) {
         List<String> names = room.getGameState().getPlayers().stream().map(Player::getName).toList();
@@ -253,6 +342,8 @@ public class GameService {
         msg.put("type", "LOBBY_UPDATE");
         msg.put("players", names);
         msg.put("hostName", room.getHostName() != null ? room.getHostName() : "");
+        msg.put("minPlayers", Room.MIN_PLAYERS);
+        msg.put("maxPlayers", Room.MAX_PLAYERS);
         broadcastJson(room, msg);
     }
 
@@ -260,31 +351,24 @@ public class GameService {
         GameState gs = room.getGameState();
         List<String> readyNames = gs.getPlayers().stream()
                 .filter(p -> p.getDiceRoll() > 0).map(Player::getName).toList();
-        broadcastJson(room, Map.of(
-            "type", "READY_COUNT",
-            "count", readyNames.size(),
-            "total", gs.getPlayers().size(),
-            "readyPlayers", readyNames
-        ));
+        Map<String, Object> msg = new HashMap<>();
+        msg.put("type", "READY_COUNT");
+        msg.put("count", readyNames.size());
+        msg.put("total", gs.getPlayers().size());
+        msg.put("readyPlayers", readyNames);
+        broadcastJson(room, msg);
     }
 
     private void broadcastJson(Room room, Map<String, ?> data) {
         try {
             String json = mapper.writeValueAsString(data);
-            for (WebSocketSession s : room.getSessions()) {
-                sendMessage(s, json);
-            }
-        } catch (Exception e) {
-            log.error("Failed to serialize broadcast", e);
-        }
+            for (WebSocketSession s : room.getSessions()) sendMessage(s, json);
+        } catch (Exception e) { log.error("Failed to serialize broadcast", e); }
     }
 
     private void sendJson(WebSocketSession session, Map<String, ?> data) {
-        try {
-            sendMessage(session, mapper.writeValueAsString(data));
-        } catch (Exception e) {
-            log.error("Failed to serialize message", e);
-        }
+        try { sendMessage(session, mapper.writeValueAsString(data)); }
+        catch (Exception e) { log.error("Failed to serialize message", e); }
     }
 
     private void sendError(WebSocketSession session, String msg) {
@@ -294,9 +378,7 @@ public class GameService {
     private void sendMessage(WebSocketSession session, String json) {
         try {
             if (session.isOpen()) {
-                synchronized (session) {
-                    session.sendMessage(new TextMessage(json));
-                }
+                synchronized (session) { session.sendMessage(new TextMessage(json)); }
             }
         } catch (IllegalStateException | IOException e) {
             log.trace("Skipped sending to closing session");

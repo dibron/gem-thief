@@ -3,7 +3,7 @@ import { useGame } from '../context/GameContext';
 
 export default function NightScreen() {
     const { nightData, send, roomCode, players, playerName, isHost, isPaused } = useGame();
-    const { phase, myRole, myDice, isAwake, awakeWithMe, canPeek, gemStatus, thiefName, peekResult } = nightData;
+    const { phase, myRole, myDice, isAwake, awakeWithMe, canPeek, gemStatus, conmanName, peekResult } = nightData;
     const [timeLeft, setTimeLeft] = useState(10);
 
     useEffect(() => { if (phase > 0) setTimeLeft(10); }, [phase]);
@@ -14,16 +14,21 @@ export default function NightScreen() {
     }, [phase, isPaused]);
 
     const togglePause = () => send({ action: "TOGGLE_PAUSE", roomId: roomCode });
+    const roleColor = myRole === 'CONMAN' ? '#ef4444' : '#3b82f6';
+    const roleLabel = myRole === 'CONMAN' ? '\u{1F3AD} Conman' : '\u{1F6E1}\u{FE0F} Guard';
 
     if (phase === 0) {
         return (
-            <div style={s.page('#0f0a1a')}>
-                <div style={{ fontSize: '3rem', animation: 'pulse 2s infinite' }}>&#x1F319;</div>
-                <h1 style={s.title}>Night Falls...</h1>
-                <p style={{ color: '#9ca3af' }}>Phase 1 begins shortly</p>
-                <p style={s.roleHint}>You are: <strong style={{ color: myRole === 'THIEF' ? '#ef4444' : '#60a5fa' }}>{myRole}</strong></p>
-                <p style={s.diceHint}>Your dice: <strong>{myDice}</strong> — you wake in Phase {myDice}</p>
-                {isHost && <button onClick={togglePause} style={s.btnPause}>{isPaused ? '▶ Resume' : '⏸ Pause'}</button>}
+            <div style={s.page('#080b14')}>
+                <div style={{ fontSize: '3rem', animation: 'pulse 2s infinite' }}>&#x1F303;</div>
+                <h1 style={s.mainTitle}>Lights Out</h1>
+                <p style={{ color: '#6b7280' }}>First patrol shift begins shortly...</p>
+                <div style={s.infoChip}>
+                    <span>You are: <strong style={{ color: roleColor }}>{roleLabel}</strong></span>
+                    <span>&bull;</span>
+                    <span>Shift: <strong style={{ color: '#eab308' }}>{myDice}</strong></span>
+                </div>
+                {isHost && <button onClick={togglePause} style={s.btnPause}>{isPaused ? '\u{25B6} Resume' : '\u{23F8} Pause'}</button>}
             </div>
         );
     }
@@ -31,65 +36,64 @@ export default function NightScreen() {
     // SLEEPING
     if (!isAwake) {
         return (
-            <div style={s.page('#0a0a18')}>
-                <div style={s.phaseBar}>
-                    <span style={s.phaseNum}>Phase {phase}/6</span>
-                    <span style={{ ...s.timer, color: timeLeft <= 3 ? '#ef4444' : '#9ca3af' }}>{timeLeft}s</span>
+            <div style={s.page('#060810')}>
+                <div style={s.shiftBar}>
+                    <span style={s.shiftLabel}>Shift {phase}/6</span>
+                    <span style={{ ...s.timer, color: timeLeft <= 3 ? '#ef4444' : '#4b5563' }}>{timeLeft}s</span>
                 </div>
                 {isPaused && <div style={s.pauseBanner}>PAUSED</div>}
                 <div style={s.sleepCard}>
-                    <div style={{ fontSize: '4rem' }}>&#x1F634;</div>
-                    <h2 style={{ color: '#e0d6f0', margin: '8px 0 4px' }}>You're Asleep</h2>
-                    <p style={{ color: '#6b7280' }}>Keep your eyes closed...</p>
+                    <div style={{ fontSize: '3.5rem' }}>&#x1F4A4;</div>
+                    <h2 style={{ color: '#9ca3af', margin: '8px 0 4px' }}>Off Duty</h2>
+                    <p style={{ color: '#4b5563', fontSize: '0.9rem' }}>Stay in the break room...</p>
                     <div style={s.miniInfo}>
-                        <span>Role: <strong style={{ color: myRole === 'THIEF' ? '#ef4444' : '#60a5fa' }}>{myRole}</strong></span>
-                        <span>You wake in Phase <strong>{myDice}</strong></span>
+                        <span style={{ color: roleColor }}>{roleLabel}</span>
+                        <span>Your shift: <strong>{myDice}</strong></span>
                     </div>
                 </div>
-                {isHost && <button onClick={togglePause} style={s.btnPause}>{isPaused ? '▶ Resume' : '⏸ Pause'}</button>}
+                {isHost && <button onClick={togglePause} style={s.btnPause}>{isPaused ? '\u{25B6} Resume' : '\u{23F8} Pause'}</button>}
             </div>
         );
     }
 
-    // AWAKE
+    // AWAKE — ON PATROL
     return (
-        <div style={s.page('#1a1400')}>
-            <div style={s.phaseBar}>
-                <span style={s.phaseNum}>Phase {phase}/6</span>
-                <span style={{ ...s.timer, color: timeLeft <= 3 ? '#ef4444' : '#fbbf24' }}>{timeLeft}s</span>
+        <div style={s.page('#0d1117')}>
+            <div style={s.shiftBar}>
+                <span style={s.shiftLabel}>Shift {phase}/6</span>
+                <span style={{ ...s.timer, color: timeLeft <= 3 ? '#ef4444' : '#eab308' }}>{timeLeft}s</span>
             </div>
             {isPaused && <div style={s.pauseBanner}>PAUSED</div>}
 
             <div style={s.wakeCard}>
-                <div style={{ fontSize: '2rem' }}>&#x1F440;</div>
-                <h2 style={{ color: '#fef3c7', margin: '4px 0 8px' }}>You Woke Up!</h2>
+                <div style={{ fontSize: '2rem' }}>&#x1F6A8;</div>
+                <h2 style={{ color: '#fef3c7', margin: '4px 0 8px' }}>On Patrol!</h2>
 
-                {/* GEM STATUS */}
                 <div style={s.section}>
-                    <h4 style={s.sectionTitle}>&#x1F48E; Gem Status</h4>
-                    {gemStatus === 'SAFE' && <p style={{ color: '#4ade80', fontWeight: 700 }}>The gem is safe.</p>}
-                    {gemStatus === 'MISSING' && <p style={{ color: '#9ca3af', fontWeight: 700 }}>The gem is already gone!</p>}
+                    <h4 style={s.secTitle}>&#x1F48E; DIAMOND STATUS</h4>
+                    {gemStatus === 'SAFE' && <p style={{ color: '#4ade80', fontWeight: 700 }}>Diamond secure in the vault.</p>}
+                    {gemStatus === 'MISSING' && <p style={{ color: '#6b7280', fontWeight: 700 }}>The vault is empty — diamond is gone!</p>}
                     {gemStatus === 'STOLEN_NOW' && (
                         <p style={{ color: '#ef4444', fontWeight: 700, fontSize: '1.1rem' }}>
-                            {thiefName === playerName ? '\u{1F977} You stole the gem!' : `\u{1F6A8} ${thiefName} stole the gem!`}
+                            {conmanName === playerName
+                                ? '\u{1F3AD} You grabbed the diamond!'
+                                : `\u{1F6A8} ${conmanName} just took the diamond!`}
                         </p>
                     )}
                 </div>
 
-                {/* WITNESSES */}
                 <div style={s.section}>
-                    <h4 style={s.sectionTitle}>&#x1F440; Who's awake?</h4>
+                    <h4 style={s.secTitle}>&#x1F441;&#xFE0F; GUARDS ON PATROL</h4>
                     {awakeWithMe.length === 0
-                        ? <p style={{ color: '#9ca3af' }}>You're completely alone.</p>
-                        : awakeWithMe.map(n => <div key={n} style={s.witnessRow}>&#x1F464; {n}</div>)
-                    }
+                        ? <p style={{ color: '#6b7280' }}>The corridor is empty. You're alone.</p>
+                        : awakeWithMe.map(n => <div key={n} style={s.guardRow}>&#x1F6E1;&#xFE0F; {n}</div>)}
                 </div>
 
-                {/* PEEK */}
                 {canPeek && (
                     <div style={s.section}>
-                        <h4 style={{ ...s.sectionTitle, color: '#f59e0b' }}>&#x1F50D; Peek at someone's dice!</h4>
-                        <div style={s.peekRow}>
+                        <h4 style={{ ...s.secTitle, color: '#eab308' }}>&#x1F50D; CHECK SCHEDULE</h4>
+                        <p style={{ color: '#9ca3af', fontSize: '0.85rem', marginBottom: '8px' }}>You're alone — peek at someone's patrol shift.</p>
+                        <div style={s.peekGrid}>
                             {players.filter(p => p.name !== playerName).map(t => (
                                 <button key={t.name} onClick={() => send({ action: "PEEK", roomId: roomCode, targetName: t.name })} style={s.btnPeek}>
                                     {t.name}
@@ -99,33 +103,30 @@ export default function NightScreen() {
                     </div>
                 )}
 
-                {peekResult && (
-                    <div style={s.peekResult}>&#x1F4A1; {peekResult}</div>
-                )}
+                {peekResult && <div style={s.peekResult}>&#x1F4CB; {peekResult}</div>}
             </div>
 
-            {isHost && <button onClick={togglePause} style={s.btnPause}>{isPaused ? '▶ Resume' : '⏸ Pause'}</button>}
+            {isHost && <button onClick={togglePause} style={s.btnPause}>{isPaused ? '\u{25B6} Resume' : '\u{23F8} Pause'}</button>}
         </div>
     );
 }
 
 const s = {
     page: (bg) => ({ display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '100vh', padding: '24px', background: bg, transition: 'background 0.4s' }),
-    phaseBar: { display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: '380px', marginBottom: '12px' },
-    phaseNum: { fontWeight: 700, fontSize: '1.1rem', color: '#e0d6f0' },
+    shiftBar: { display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: '400px', marginBottom: '10px' },
+    shiftLabel: { fontWeight: 700, fontSize: '1.1rem', color: '#c8d6e5' },
     timer: { fontWeight: 700, fontSize: '1.3rem', fontFamily: 'monospace' },
-    title: { fontSize: '2rem', fontWeight: 800, color: '#e0d6f0', margin: '8px 0' },
-    roleHint: { color: '#9ca3af', margin: '12px 0 4px', fontSize: '1.05rem' },
-    diceHint: { color: '#f59e0b', fontSize: '0.95rem' },
-    pauseBanner: { background: '#ef4444', color: '#fff', padding: '6px 20px', borderRadius: '6px', fontWeight: 800, marginBottom: '8px' },
-    sleepCard: { width: '100%', maxWidth: '380px', textAlign: 'center', padding: '32px 24px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '16px', marginTop: '8px' },
-    miniInfo: { display: 'flex', justifyContent: 'space-around', marginTop: '16px', fontSize: '0.85rem', color: '#9ca3af' },
-    wakeCard: { width: '100%', maxWidth: '380px', textAlign: 'center', padding: '24px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: '16px', marginTop: '8px' },
+    mainTitle: { fontSize: '2rem', fontWeight: 800, color: '#c8d6e5', margin: '8px 0' },
+    infoChip: { display: 'flex', gap: '10px', alignItems: 'center', padding: '8px 16px', background: 'rgba(255,255,255,0.04)', borderRadius: '20px', fontSize: '0.9rem', marginTop: '14px', color: '#9ca3af' },
+    pauseBanner: { background: '#ef4444', color: '#fff', padding: '6px 20px', borderRadius: '6px', fontWeight: 800, marginBottom: '8px', fontSize: '0.9rem', letterSpacing: '2px' },
+    sleepCard: { width: '100%', maxWidth: '400px', textAlign: 'center', padding: '32px 24px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: '16px', marginTop: '8px' },
+    miniInfo: { display: 'flex', justifyContent: 'space-around', marginTop: '16px', fontSize: '0.85rem', color: '#6b7280' },
+    wakeCard: { width: '100%', maxWidth: '400px', textAlign: 'center', padding: '24px', background: 'rgba(234,179,8,0.04)', border: '1px solid rgba(234,179,8,0.15)', borderRadius: '16px', marginTop: '8px' },
     section: { margin: '14px 0', textAlign: 'left' },
-    sectionTitle: { fontSize: '0.9rem', fontWeight: 700, color: '#d1d5db', margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: '0.5px' },
-    witnessRow: { padding: '4px 0', fontSize: '1rem', color: '#fef3c7' },
-    peekRow: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
-    btnPeek: { padding: '8px 16px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #d97706, #f59e0b)', color: '#000', fontWeight: 700, fontSize: '0.9rem' },
-    peekResult: { marginTop: '12px', padding: '10px 16px', background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: '10px', color: '#c084fc', fontWeight: 600 },
-    btnPause: { marginTop: '20px', padding: '10px 24px', borderRadius: '8px', border: '2px solid rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.06)', color: '#e0d6f0', fontWeight: 700, fontSize: '0.95rem' },
+    secTitle: { fontSize: '0.75rem', fontWeight: 700, color: '#6b7280', margin: '0 0 6px', letterSpacing: '1.5px' },
+    guardRow: { padding: '3px 0', fontSize: '0.95rem', color: '#fef3c7' },
+    peekGrid: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
+    btnPeek: { padding: '8px 14px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #92400e, #b45309)', color: '#fef3c7', fontWeight: 700, fontSize: '0.85rem' },
+    peekResult: { marginTop: '12px', padding: '10px 14px', background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)', borderRadius: '10px', color: '#eab308', fontWeight: 600, fontSize: '0.95rem' },
+    btnPause: { marginTop: '20px', padding: '10px 24px', borderRadius: '8px', border: '2px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: '#9ca3af', fontWeight: 700, fontSize: '0.9rem' },
 };

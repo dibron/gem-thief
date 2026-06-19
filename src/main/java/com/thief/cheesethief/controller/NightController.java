@@ -15,16 +15,12 @@ public class NightController {
     }
 
     public void processPhase(int phase) {
-
         List<Player> awakePlayers = gameState.getPlayersAtTime().getOrDefault(phase, new ArrayList<>());
+        boolean conmanIsAwake = awakePlayers.contains(gameState.getConman());
 
-        boolean thiefIsAwake = awakePlayers.contains(gameState.getThief());
-
-
-        if (thiefIsAwake && !gameState.isGemStolen()) {
+        if (conmanIsAwake && !gameState.isGemStolen()) {
             gameState.stealGem();
-
-            gameState.pushMessage(gameState.getThief(), "STOLEN_THIS_PHASE");
+            gameState.pushMessage(gameState.getConman(), "STOLEN_THIS_PHASE");
         }
     }
 }

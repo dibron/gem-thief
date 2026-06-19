@@ -9,15 +9,18 @@ export function GameProvider({ children }) {
     const [roomCode, setRoomCode] = useState('');
     const [isHost, setIsHost] = useState(false);
     const [players, setPlayers] = useState([]);
-    const [readyCount, setReadyCount] = useState({ count: 0, total: 4, readyPlayers: [] });
+    const [lobbyInfo, setLobbyInfo] = useState({ min: 5, max: 8 });
+    const [readyCount, setReadyCount] = useState({ count: 0, total: 5, readyPlayers: [] });
     const [isPaused, setIsPaused] = useState(false);
-    const [voteCount, setVoteCount] = useState({ count: 0, total: 4 });
+    const [voteCount, setVoteCount] = useState({ count: 0, total: 5 });
     const [gameResult, setGameResult] = useState(null);
+    const [followerData, setFollowerData] = useState(null);
+    const [insiderData, setInsiderData] = useState(null);
 
     const [nightData, setNightData] = useState({
         phase: 0, myRole: '', myDice: 0,
         isAwake: false, awakeWithMe: [], canPeek: false,
-        gemStatus: '', thiefName: '', peekResult: ''
+        gemStatus: '', conmanName: '', peekResult: ''
     });
 
     const socketRef = useRef(null);
@@ -28,6 +31,7 @@ export function GameProvider({ children }) {
         switch (d.type) {
             case 'LOBBY_UPDATE':
                 setPlayers(d.players.map((name, i) => ({ id: i, name, isHost: name === d.hostName })));
+                setLobbyInfo({ min: d.minPlayers || 5, max: d.maxPlayers || 8 });
                 setScreen(prev => prev === 'home' ? 'lobby' : prev);
                 break;
 
@@ -51,7 +55,7 @@ export function GameProvider({ children }) {
                 setNightData(prev => ({
                     ...prev, phase: d.phase, isAwake: d.isAwake,
                     awakeWithMe: d.awakeWithMe || [], canPeek: d.canPeek || false,
-                    gemStatus: d.gemStatus || '', thiefName: d.thiefName || '',
+                    gemStatus: d.gemStatus || '', conmanName: d.conmanName || '',
                     peekResult: ''
                 }));
                 break;
@@ -64,7 +68,26 @@ export function GameProvider({ children }) {
                 setIsPaused(d.paused);
                 break;
 
+            case 'FOLLOWER_PHASE':
+                setFollowerData({ candidates: d.candidates, required: d.requiredFollowers });
+                setScreen('follower');
+                break;
+
+            case 'FOLLOWER_WAIT':
+                setScreen('follower_wait');
+                break;
+
+            case 'FOLLOWERS_CHOSEN':
+                setFollowerData(prev => ({ ...prev, chosen: d.followers }));
+                break;
+
+            case 'YOU_ARE_INSIDER':
+                setInsiderData({ conmanName: d.conmanName, otherInsiders: d.otherInsiders });
+                setNightData(prev => ({ ...prev, myRole: 'INSIDER' }));
+                break;
+
             case 'DAY_PHASE':
+                if (d.myRole) setNightData(prev => ({ ...prev, myRole: d.myRole }));
                 setScreen('vote');
                 break;
 
@@ -79,64 +102,50 @@ export function GameProvider({ children }) {
 
             case 'GAME_RESTART':
                 setScreen('lobby');
-                setNightData({ phase: 0, myRole: '', myDice: 0, isAwake: false, awakeWithMe: [], canPeek: false, gemStatus: '', thiefName: '', peekResult: '' });
-                setReadyCount({ count: 0, total: 4, readyPlayers: [] });
-                setVoteCount({ count: 0, total: 4 });
+                setNightData({ phase: 0, myRole: '', myDice: 0, isAwake: false, awakeWithMe: [], canPeek: false, gemStatus: '', conmanName: '', peekResult: '' });
+                setReadyCount({ count: 0, total: 5, readyPlayers: [] });
+                setVoteCount({ count: 0, total: 5 });
                 setGameResult(null);
+                setFollowerData(null);
+                setInsiderData(null);
                 setIsPaused(false);
                 break;
 
-            case 'PLAYER_LEFT':
-                break;
-
-            case 'ERROR':
-                alert(d.message);
-                break;
-
+            case 'PLAYER_LEFT': break;
+            case 'ERROR': alert(d.message); break;
             default: break;
         }
     }, []);
 
     const connectWebSocket = useCallback((onOpen) => {
-        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-            onOpen(socketRef.current);
-            return;
-        }
+        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) { onOpen(socketRef.current); return; }
         if (socketRef.current) { socketRef.current.close(); socketRef.current = null; }
-
-        const ws = new WebSocket("ws://localhost:8080/ws/game");
+        const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsHost = import.meta.env.VITE_API_URL || window.location.host;
+        const ws = new WebSocket(`${wsProto}//${wsHost}/ws/game`);
         ws.onopen = () => onOpen(ws);
         ws.onmessage = handleMsg;
-        ws.onclose = () => {
-            socketRef.current = null;
-            setScreen('home');
-        };
+        ws.onclose = () => { socketRef.current = null; setScreen('home'); };
         socketRef.current = ws;
     }, [handleMsg]);
 
     const send = useCallback((payload) => {
-        if (socketRef.current?.readyState === WebSocket.OPEN) {
+        if (socketRef.current?.readyState === WebSocket.OPEN)
             socketRef.current.send(JSON.stringify(payload));
-        }
     }, []);
 
     const leaveGame = useCallback(() => {
         if (socketRef.current) { socketRef.current.close(); socketRef.current = null; }
-        setScreen('home');
-        setPlayers([]);
-        setRoomCode('');
-        setPlayerName('');
-        setIsHost(false);
-        setGameResult(null);
+        setScreen('home'); setPlayers([]); setRoomCode(''); setPlayerName('');
+        setIsHost(false); setGameResult(null); setFollowerData(null); setInsiderData(null);
     }, []);
 
     useEffect(() => () => { if (socketRef.current) socketRef.current.close(); }, []);
 
-    const value = {
-        screen, setScreen, playerName, setPlayerName, roomCode, setRoomCode,
-        isHost, setIsHost, players, connectWebSocket, send,
-        readyCount, nightData, isPaused, voteCount, gameResult, leaveGame
-    };
-
-    return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
+    return <GameContext.Provider value={{
+        screen, playerName, setPlayerName, roomCode, setRoomCode,
+        isHost, setIsHost, players, lobbyInfo, connectWebSocket, send,
+        readyCount, nightData, isPaused, voteCount, gameResult,
+        followerData, insiderData, leaveGame
+    }}>{children}</GameContext.Provider>;
 }

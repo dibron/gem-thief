@@ -7,16 +7,20 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 public class GameState {
     private final List<Player> players;
-    private volatile Player thief;
+    private volatile Player conman;
+    private final List<Player> followers;
     private volatile boolean isGemStolen;
+    private volatile int requiredFollowers;
 
     private final Map<Integer, List<Player>> playersAtTime;
-    private final Map<String, String> votes; // voterName -> targetName
+    private final Map<String, String> votes;
     private final Map<Player, List<String>> playerMessages;
 
     public GameState() {
         this.isGemStolen = false;
+        this.requiredFollowers = 0;
         this.players = new CopyOnWriteArrayList<>();
+        this.followers = new CopyOnWriteArrayList<>();
         this.playersAtTime = new ConcurrentHashMap<>();
         this.votes = new ConcurrentHashMap<>();
         this.playerMessages = new ConcurrentHashMap<>();
@@ -24,8 +28,17 @@ public class GameState {
 
     public void addPlayer(Player player) { players.add(player); }
     public List<Player> getPlayers() { return players; }
-    public Player getThief() { return thief; }
-    public void setThief(Player thief) { this.thief = thief; }
+    public Player getConman() { return conman; }
+    public void setConman(Player conman) { this.conman = conman; }
+    public List<Player> getFollowers() { return followers; }
+
+    public void addFollower(Player player) {
+        player.setFollower(true);
+        followers.add(player);
+    }
+
+    public int getRequiredFollowers() { return requiredFollowers; }
+    public void setRequiredFollowers(int n) { this.requiredFollowers = n; }
 
     public void setPlayerAtTime(Player player, int time) {
         playersAtTime.computeIfAbsent(time, k -> new CopyOnWriteArrayList<>()).add(player);
@@ -36,11 +49,9 @@ public class GameState {
     public void stealGem() { isGemStolen = true; }
     public boolean isGemStolen() { return isGemStolen; }
 
-    public void castVote(String voterName, String targetName) {
-        votes.put(voterName, targetName);
-    }
-
+    public void castVote(String voterName, String targetName) { votes.put(voterName, targetName); }
     public int getVoteCount() { return votes.size(); }
+    public Map<String, String> getVotes() { return votes; }
 
     public String getMostVotedPlayer() {
         Map<String, Integer> counts = new ConcurrentHashMap<>();
@@ -53,8 +64,6 @@ public class GameState {
                 .orElse(null);
     }
 
-    public Map<String, String> getVotes() { return votes; }
-
     public void pushMessage(Player p, String msg) {
         playerMessages.computeIfAbsent(p, k -> new CopyOnWriteArrayList<>()).add(msg);
     }
@@ -66,14 +75,17 @@ public class GameState {
     public void clearMessages() { playerMessages.clear(); }
 
     public void reset() {
-        thief = null;
+        conman = null;
+        followers.clear();
         isGemStolen = false;
+        requiredFollowers = 0;
         playersAtTime.clear();
         votes.clear();
         playerMessages.clear();
         for (Player p : players) {
             p.setDiceRoll(0);
-            p.setThief(false);
+            p.setConman(false);
+            p.setFollower(false);
             p.setHasVoted(false);
         }
     }

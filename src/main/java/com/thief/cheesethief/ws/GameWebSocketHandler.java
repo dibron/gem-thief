@@ -11,6 +11,9 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Component
 public class GameWebSocketHandler extends TextWebSocketHandler {
 
@@ -44,6 +47,14 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                 case "PEEK" -> {
                     String target = node.path("targetName").asText("");
                     gameService.playerPeek(roomId, session, target);
+                }
+                case "CHOOSE_FOLLOWERS" -> {
+                    JsonNode arr = node.path("followers");
+                    List<String> names = new ArrayList<>();
+                    if (arr.isArray()) {
+                        for (JsonNode n : arr) names.add(n.asText());
+                    }
+                    gameService.chooseFollower(roomId, session, names);
                 }
                 case "VOTE" -> {
                     String target = node.path("targetName").asText("");

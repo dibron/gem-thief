@@ -1,15 +1,23 @@
-# Gem Thief
+# The Vault
 
-A real-time multiplayer party game for 4 players. One player is secretly the **Thief** — the rest are **Sleepyheads** trying to figure out who stole the gem.
+A real-time multiplayer social deduction game for 5-8 players. One player is the **Conman** posing as a guard — the rest are **Guards** protecting a diamond.
 
 ## How It Works
 
-1. **Create or join a room** — share the 4-letter code with friends
-2. **Roll dice** — your roll (1–6) determines which phase you wake up during the night
-3. **Night phase** — 6 phases play out over ~60 seconds. You only wake up during your phase and can see who else is awake. The thief automatically steals the gem when they wake up
-4. **Peek** — if you wake up alone (and you're not the thief), you can peek at another player's dice roll to gather intel
-5. **Vote** — after the night ends, everyone votes on who they think the thief is
-6. **Win condition** — Sleepyheads win if they correctly vote out the thief. The thief wins if they survive the vote
+1. **Join the vault** — create a room and share the 4-letter code
+2. **Roll for patrol shifts** — your dice roll (1-6) determines which shift you patrol during the night
+3. **Night shifts** — 6 shifts play out over ~60 seconds. You only wake during your shift. The conman steals the diamond when they patrol. If you're alone, you can peek at someone else's schedule
+4. **Insider recruitment** — after night ends, the conman secretly picks 1-2 guards as insiders (1 for 5-6 players, 2 for 7-8). Insiders learn who the conman is and win with them
+5. **Interrogation** — everyone votes on who to detain
+6. **Win condition** — Guards win if they detain the conman. Conman + insiders win if the conman survives
+
+## Roles
+
+| Role | Count | Goal |
+|------|-------|------|
+| Guard | Most players | Find and detain the conman |
+| Conman | 1 | Steal the diamond and survive the vote |
+| Insider | 1-2 (chosen post-night) | Protect the conman — win together |
 
 ## Tech Stack
 
@@ -17,56 +25,34 @@ A real-time multiplayer party game for 4 players. One player is secretly the **T
 |-------|------|
 | Backend | Java 17, Spring Boot, Spring WebSocket |
 | Frontend | React 19, Vite |
-| Communication | WebSocket (real-time) + REST (room creation) |
-| Storage | In-memory (no database needed) |
+| Communication | WebSocket + REST |
+| Storage | In-memory only |
 
 ## Running Locally
 
-### Prerequisites
-
-- Java 17+
-- Node.js 18+
-
-### Backend
+**Prerequisites:** Java 17+, Node.js 18+
 
 ```bash
+# Backend (port 8080)
 ./mvnw spring-boot:run
+
+# Frontend (port 5173)
+cd client && npm install && npm run dev
 ```
 
-Starts on `http://localhost:8080`.
-
-### Frontend
-
-```bash
-cd client
-npm install
-npm run dev
-```
-
-Starts on `http://localhost:5173`.
-
-Open 4 browser tabs, create a room in one, and join with the code in the others.
+Open 5+ browser tabs, create a room, share the code.
 
 ## Project Structure
 
 ```
-gem-thief/
 ├── src/main/java/com/thief/cheesethief/
-│   ├── config/          # WebSocket configuration
-│   ├── controller/      # Night phase + pregame logic
-│   ├── model/           # Player, Room, GameState
-│   ├── service/         # Core game engine (GameService)
-│   └── ws/              # WebSocket message handler
+│   ├── model/        Player, Room, GameState
+│   ├── service/      GameService (core engine)
+│   ├── controller/   Night + pregame logic
+│   ├── ws/           WebSocket handler
+│   └── config/       WebSocket config
 ├── client/src/
-│   ├── context/         # React context (global state + WS)
-│   └── screens/         # Home, Lobby, Night, Vote, GameOver
+│   ├── context/      GameContext (state + WebSocket)
+│   └── screens/      Home, Lobby, Night, Follower, Vote, GameOver
 └── pom.xml
 ```
-
-## Game Features
-
-- **Real-time WebSocket** communication — no polling
-- **Dice-based wake schedule** — your roll = your phase, creating natural information asymmetry
-- **Peek mechanic** — lone sleepyheads can spy on others' dice rolls for clues
-- **Pause button** — host can pause during night phase (useful for debugging or if someone needs a break)
-- **Instant restart** — host can start a new round without anyone leaving the room

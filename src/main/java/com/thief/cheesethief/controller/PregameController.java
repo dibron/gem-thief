@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class PregameController {
-    GameState gameState;
+    private final GameState gameState;
 
     public PregameController(GameState gameState) {
         this.gameState = gameState;
@@ -15,8 +15,11 @@ public class PregameController {
 
     public void process() {
         List<Player> players = gameState.getPlayers();
-        Player thief = players.get(ThreadLocalRandom.current().nextInt(players.size()));
-        gameState.setThief(thief);
-        thief.setThief(true);
+        Player conman = players.get(ThreadLocalRandom.current().nextInt(players.size()));
+        gameState.setConman(conman);
+        conman.setConman(true);
+
+        int size = players.size();
+        gameState.setRequiredFollowers(size >= 7 ? 2 : 1);
     }
 }
